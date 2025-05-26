@@ -1,16 +1,40 @@
--- This is an example SQLX file to help you learn the basics of Dataform.
--- Visit https://cloud.google.com/dataform/docs/sql-workflows for more information on how to configure your SQL workflow.
+-- definitions/marts/test_indices.sqlx
 
--- You can delete this file, then commit and push your changes to your repository when you are ready.
-
--- Config blocks allow you to configure, document, and test your data assets.
 config {
-  type: "view", // Creates a view in BigQuery. Try changing to "table" instead.
-  columns: {
-    test: "A description for the test column", // Column descriptions are pushed to BigQuery.
-  }
+  type: "operations",
+  schema: "bq_data_finance",
+  description: "Test minimal avec opérations multiples"
 }
 
--- The rest of a SQLX file contains your SELECT statement used to create the table.
+js {
+  const projectId = "financial-data-storage"; // Remplacez par votre vrai project ID
+  const databaseId = "clean_data_prod"; // DB resultat
+  const indices = ["VIX","VXD"];
+}
 
-SELECT 1 as test
+${indices.map(item => `
+CREATE OR REPLACE TABLE \`${projectId}.${databaseId}.${item}\` AS (
+with Indice_sans_doublons as (
+SELECT 
+    Date,
+    Ouverture,
+    Haut,
+    Bas,
+    Cloture,
+    Volume,
+    ROW_NUMBER() OVER(PARTITION BY Date ORDER BY timestamp DESC) as rn
+FROM \`${projectId}.bq_data_finance_prod.${item}-raw\`
+order by Date desc
+)
+
+SELECT 
+    Date,
+    Ouverture,
+    Haut,
+    Bas,
+    Cloture,
+    Volume
+from Indice_sans_doublons
+where rn = 1
+order by Date desc
+);`).join('\n')}
